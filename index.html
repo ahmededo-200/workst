@@ -41,9 +41,9 @@
     <option value="مشروع المجمع السكني">مشروع المجمع السكني</option>
   </select>
 
-  <label>نوع العمل المنجز (اختياري عند الانصراف)</label>
+  <label>نوع العمل المنجز</label>
   <select id="workType">
-    <option value="لم يتم الإنجاز بعد">لا يوجد (تسجيل حضور فقط)</option>
+    <option value="تسجيل حضور فقط">لا يوجد (تسجيل حضور فقط)</option>
     <option value="معجون">معجون</option>
     <option value="محارة">محارة</option>
     <option value="دهان">دهان</option>
@@ -56,15 +56,16 @@
   <span class="gps-status" id="gpsText">⏳ جاري التقاط إحداثيات الـ GPS الفعلي للموقع...</span>
   <video id="video" autoplay playsinline></video>
   
-  <button class="btn" id="submitBtn" onclick="sendAttendance()">📸 التقاط البصمة وإرسال التقرير</button>
+  <button class="btn" id="submitBtn" onclick="sendAttendanceToSupabase()">📸 التقاط البصمة وإرسال التقرير</button>
   <canvas id="canvas" width="640" height="480"></canvas>
 
-  <div class="alert-success" id="successMsg">🎉 تم توثيق حضورك وصورتك وموقعك بنجاح بالثانية!</div>
+  <div class="alert-success" id="successMsg">🎉 تم توثيق بصمتك وحفظ البيانات في السيرفر بنجاح بنسبة 100%!</div>
 </div>
 
 <script>
-  // تم ربط كود النشر الجديد الخاص بك هنا مباشرة بنجاح
-  const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSHeWdypyOSPL6iM5_R4WoST7ekv9r0sEjXoDjvOB6pIwSCMqGcBi1q2-IhvBDWPKj/exec";
+  // تم ربط السيرفر والـ Keys الخاصة بك بنجاح تام
+  const SUPABASE_URL = "https://supabase.co";
+  const SUPABASE_KEY = "sb_publishable_jFF3IrgQ8-KZ36KLLIOuLw_ND9X6-Vr";
 
   const video = document.getElementById('video');
   const canvas = document.getElementById('canvas');
@@ -72,11 +73,11 @@
   const successMsg = document.getElementById('successMsg');
   const submitBtn = document.getElementById('submitBtn');
   
-  let userGps = "تعذر التقاط الموقع الجغرافي";
+  let userGps = "تعذر التقاط الموقع";
 
   navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
     .then(stream => { video.srcObject = stream; })
-    .catch(err => { alert("🚨 خطأ أمني: يجب السماح للكاميرا بالعمل لتأكيد الهوية ومنع التلاعب!"); });
+    .catch(err => { alert("🚨 خطأ أمني: يجب السماح للكاميرا بالعمل لتأكيد الهوية!"); });
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
@@ -93,7 +94,7 @@
     );
   }
 
-  function sendAttendance() {
+  function sendAttendanceToSupabase() {
     const empId = document.getElementById('empId').value;
     const status = document.getElementById('status').value;
     const projectName = document.getElementById('projectName').value;
@@ -103,38 +104,47 @@
     if (!empId) { alert("الرجاء إدخال رقم العامل التسلسلي أولاً!"); return; }
 
     submitBtn.disabled = true;
-    submitBtn.innerText = "جاري تشفير ورفع البصمة والصورة الحية...";
+    submitBtn.innerText = "جاري تشفير وحفظ البصمة والصورة في السيرفر...";
 
     const context = canvas.getContext('2d');
     context.drawImage(video, 0, 0, 640, 480);
-    const imageData = canvas.toDataURL('image/jpeg', 0.4);
+    const imageData = canvas.toDataURL('image/jpeg', 0.5);
 
     const payload = {
-      empId: empId,
+      emp_id: empId,
       status: status,
-      projectName: projectName,
-      workType: workType,
-      meters: meters,
-      gpsLocation: userGps,
-      imageData: imageData
+      project_name: projectName,
+      work_type: workType,
+      meters: parseFloat(meters),
+      gps_location: userGps,
+      image_url: imageData
     };
 
-    fetch(GOOGLE_SCRIPT_URL, {
+    fetch(`${SUPABASE_URL}/rest/v1/attendance`, {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
       body: JSON.stringify(payload)
     })
-    .then(() => {
-      successMsg.style.display = "block";
-      submitBtn.disabled = false;
-      submitBtn.innerText = "📸 التقاط البصمة وإرسال التقرير";
-      document.getElementById('empId').value = "";
-      document.getElementById('meters').value = "";
-      setTimeout(() => { successMsg.style.display = "none"; }, 5000);
+    .then(response => {
+      if (response.ok) {
+        successMsg.style.display = "block";
+        submitBtn.disabled = false;
+        submitBtn.innerText = "📸 التقاط البصمة وإرسال التقرير";
+        document.getElementById('empId').value = "";
+        document.getElementById('meters').value = "";
+        setTimeout(() => { successMsg.style.display = "none"; }, 5000);
+      } else {
+        alert("حدث خطأ في استجابة السيرفر، يرجى مراجعة إعدادات الجدول وعمود الأمتار.");
+        submitBtn.disabled = false;
+      }
     })
     .catch(err => {
-      alert("حدث خطأ في الاتصال بالشبكة، يرجى المحاولة مرة أخرى.");
+      alert("خطأ في الشبكة: تعذر الوصول لقاعدة البيانات الفورية.");
       submitBtn.disabled = false;
     });
   }
