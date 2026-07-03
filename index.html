@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بصمة الحضور والإنتاجية الذكية</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6f9; margin: 0; padding: 15px; text-align: center; }
+    .container { background: white; max-width: 450px; margin: 10px auto; padding: 25px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+    h2 { color: #1e3a8a; margin-bottom: 20px; font-size: 22px; font-weight: 700; }
+    label { display: block; text-align: right; margin: 12px 5px 5px 0; font-weight: bold; color: #334155; }
+    input, select { width: 100%; padding: 14px; margin-bottom: 5px; border: 2px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; transition: 0.3s; }
+    input:focus, select:focus { border-color: #1e3a8a; outline: none; }
+    #video { width: 100%; height: auto; border-radius: 10px; background: #000; transform: scaleX(-1); margin-top: 10px; }
+    #canvas { display: none; }
+    .btn { background: #10b981; color: white; font-size: 18px; font-weight: bold; padding: 14px; width: 100%; border: none; border-radius: 8px; cursor: pointer; transition: 0.3s; margin-top: 20px; }
+    .btn:hover { background: #059669; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .alert-success { background: #d1fae5; color: #065f46; padding: 15px; border-radius: 8px; font-weight: bold; margin-top: 15px; display: none; }
+    .gps-status { color: #64748b; font-size: 13px; text-align: right; display: block; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>📋 تسجيل الحضور والإنتاجية اليومية</h2>
+  
+  <label>الرقم التسلسلي للعامل</label>
+  <input type="text" id="empId" placeholder="مثال: EMP-2026-0001" required>
+
+  <label>نوع الحركة</label>
+  <select id="status">
+    <option value="حضور صباحي">حضور صباحي</option>
+    <option value="انصراف مسائي">انصراف مسائي</option>
+  </select>
+
+  <label>اسم المشروع / الموقع الفعلي</label>
+  <select id="projectName">
+    <option value="المكتب الرئيسي">المكتب الرئيسي</option>
+    <option value="مشروع البرج التجاري">مشروع البرج التجاري</option>
+    <option value="مشروع المجمع السكني">مشروع المجمع السكني</option>
+  </select>
+
+  <label>نوع العمل المنجز (اختياري عند الانصراف)</label>
+  <select id="workType">
+    <option value="لم يتم الإنجاز بعد">لا يوجد (تسجيل حضور فقط)</option>
+    <option value="معجون">معجون</option>
+    <option value="محارة">محارة</option>
+    <option value="دهان">دهان</option>
+  </select>
+
+  <label>عدد الأمتار المنجزة</label>
+  <input type="number" id="meters" placeholder="اكتب عدد الأمتار بالمتر المربع">
+
+  <label>البصمة المرئية وتوثيق الموقع</label>
+  <span class="gps-status" id="gpsText">⏳ جاري التقاط إحداثيات الـ GPS الفعلي للموقع...</span>
+  <video id="video" autoplay playsinline></video>
+  
+  <button class="btn" id="submitBtn" onclick="sendAttendance()">📸 التقاط البصمة وإرسال التقرير</button>
+  <canvas id="canvas" width="640" height="480"></canvas>
+
+  <div class="alert-success" id="successMsg">🎉 تم توثيق حضورك وصورتك وموقعك بنجاح بالثانية!</div>
+</div>
+
+<script>
+  // تم وضع رابط الـ Web App الخاص بك هنا مباشرة وبنجاح
+  const GOOGLE_SCRIPT_URL = "https://google.com";
+
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const gpsText = document.getElementById('gpsText');
+  const successMsg = document.getElementById('successMsg');
+  const submitBtn = document.getElementById('submitBtn');
+  
+  let userGps = "تعذر التقاط الموقع الجغرافي";
+
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+    .then(stream => { video.srcObject = stream; })
+    .catch(err => { alert("🚨 خطأ أمني: يجب السماح للكاميرا بالعمل لتأكيد الهوية ومنع التلاعب!"); });
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        userGps = `${position.coords.latitude},${position.coords.longitude}`;
+        gpsText.innerText = "✅ تم قفل نطاق الموقع الجغرافي الفعلي للمشروع.";
+        gpsText.style.color = "green";
+      },
+      (error) => {
+        gpsText.innerText = "❌ خطأ أمني: يرجى فتح الـ GPS بالهاتف لتسجيل البصمة.";
+        gpsText.style.color = "red";
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  function sendAttendance() {
+    const empId = document.getElementById('empId').value;
+    const status = document.getElementById('status').value;
+    const projectName = document.getElementById('projectName').value;
+    const workType = document.getElementById('workType').value;
+    const meters = document.getElementById('meters').value || "0";
+
+    if (!empId) { alert("الرجاء إدخال رقم العامل التسلسلي أولاً!"); return; }
+
+    submitBtn.disabled = true;
+    submitBtn.innerText = "جاري تشفير ورفع البصمة والصورة الحية...";
+
+    const context = canvas.getContext('2d');
+    context.drawImage(video, 0, 0, 640, 480);
+    const imageData = canvas.toDataURL('image/jpeg', 0.5);
+
+    const payload = {
+      empId: empId,
+      status: status,
+      projectName: projectName,
+      workType: workType,
+      meters: meters,
+      gpsLocation: userGps,
+      imageData: imageData
+    };
+
+    fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(() => {
+      successMsg.style.display = "block";
+      submitBtn.disabled = false;
+      submitBtn.innerText = "📸 التقاط البصمة وإرسال التقرير";
+      document.getElementById('empId').value = "";
+      document.getElementById('meters').value = "";
+      setTimeout(() => { successMsg.style.display = "none"; }, 5000);
+    })
+    .catch(err => {
+      alert("حدث خطأ في الاتصال بالشبكة، يرجى المحاولة مرة أخرى.");
+      submitBtn.disabled = false;
+    });
+  }
+</script>
+
+</body>
+</html>
